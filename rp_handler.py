@@ -7,21 +7,46 @@ import sys
 import subprocess
 import time
 import socket
+import threading
 import runpod
+
+print("=" * 50)
+print("HANDLER MODULE LOADED")
+print(f"Python: {sys.executable}")
+print(f"CWD: {os.getcwd()}")
+print("=" * 50)
+sys.stdout.flush()
 
 # Server process
 server_process = None
+
+def log_output(proc):
+    """Thread to continuously log server output."""
+    try:
+        for line in iter(proc.stdout.readline, ''):
+            if line:
+                print(f"[moshi] {line.strip()}")
+                sys.stdout.flush()
+    except Exception as e:
+        print(f"[log_output error] {e}")
+        sys.stdout.flush()
 
 def start_personaplex_server():
     """Start the PersonaPlex server as a subprocess."""
     global server_process
 
+    print("start_personaplex_server() called")
+    sys.stdout.flush()
+
     # Create SSL directory
     ssl_dir = "/app/ssl"
     os.makedirs(ssl_dir, exist_ok=True)
+    print(f"SSL dir: {ssl_dir}")
 
     # Use the venv Python to run the server
     python_path = "/app/.venv/bin/python"
+    print(f"Python path: {python_path}")
+    print(f"Python exists: {os.path.exists(python_path)}")
 
     cmd = [
         python_path, "-m", "moshi.server",
@@ -31,6 +56,8 @@ def start_personaplex_server():
     ]
 
     print(f"Starting PersonaPlex server: {' '.join(cmd)}")
+    sys.stdout.flush()
+
     server_process = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -38,16 +65,27 @@ def start_personaplex_server():
         text=True,
         bufsize=1
     )
+    print(f"Server process started, PID: {server_process.pid}")
+    sys.stdout.flush()
+
+    # Start output logging thread
+    log_thread = threading.Thread(target=log_output, args=(server_process,), daemon=True)
+    log_thread.start()
+    print("Log thread started")
+    sys.stdout.flush()
 
     # Wait for server to be ready
     start_time = time.time()
-    timeout = 180  # 3 minutes max for model loading (first run downloads weights)
+    timeout = 180  # 3 minutes max for model loading
 
     while time.time() - start_time < timeout:
+        elapsed = int(time.time() - start_time)
+
         if server_process.poll() is not None:
-            # Process died - read output
-            output = server_process.stdout.read() if server_process.stdout else "No output"
-            raise RuntimeError(f"Server died during startup: {output}")
+            # Process died
+            print(f"SERVER DIED! Exit code: {server_process.returncode}")
+            sys.stdout.flush()
+            raise RuntimeError(f"Server died with exit code {server_process.returncode}")
 
         # Check if port is open
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -55,16 +93,13 @@ def start_personaplex_server():
         sock.close()
 
         if result == 0:
-            print("PersonaPlex server is ready!")
+            print(f"PersonaPlex server is ready after {elapsed}s!")
+            sys.stdout.flush()
             return True
 
-        # Print server output while waiting
-        if server_process.stdout:
-            import select
-            if select.select([server_process.stdout], [], [], 0.1)[0]:
-                line = server_process.stdout.readline()
-                if line:
-                    print(f"[server] {line.strip()}")
+        if elapsed % 10 == 0:
+            print(f"Waiting for server... {elapsed}s elapsed")
+            sys.stdout.flush()
 
         time.sleep(1)
 
@@ -86,6 +121,11 @@ def stop_server():
 
 def handler(event):
     """RunPod job handler - starts PersonaPlex and waits for shutdown."""
+    print("=" * 50)
+    print("HANDLER CALLED")
+    print(f"Event: {event}")
+    print("=" * 50)
+    sys.stdout.flush()
 
     # Get connection details from environment
     public_ip = os.environ.get('RUNPOD_PUBLIC_IP', 'localhost')
@@ -93,6 +133,8 @@ def handler(event):
 
     print(f"Public IP: {public_ip}")
     print(f"TCP Port: {tcp_port}")
+    print(f"HF_TOKEN set: {'HF_TOKEN' in os.environ}")
+    sys.stdout.flush()
 
     try:
         # Start the PersonaPlex server
