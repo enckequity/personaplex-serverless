@@ -34,6 +34,8 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/enckequity/personaplex-serverless:latest
+          tags: |
+            ghcr.io/enckequity/personaplex-serverless:latest
+            ghcr.io/enckequity/personaplex-serverless:v2
           cache-from: type=gha
           cache-to: type=gha,mode=max
