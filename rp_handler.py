@@ -21,7 +21,7 @@ def start_personaplex_server():
     os.makedirs(ssl_dir, exist_ok=True)
 
     # Use the venv Python to run the server
-    python_path = "/app/moshi/.venv/bin/python"
+    python_path = "/app/.venv/bin/python"
 
     cmd = [
         python_path, "-m", "moshi.server",
